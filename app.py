@@ -17,17 +17,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 
 # ============================================================
-# APP CONFIGURATION
+# FLASK APPLICATION
 # ============================================================
 
 app = Flask(__name__)
 
-# Secret key for sessions
-# On Render, we will set SECRET_KEY as an environment variable.
 app.secret_key = os.environ.get(
     "SECRET_KEY",
     "development-secret-key"
 )
+
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
 
 DATABASE = "helpgenie.db"
 MODEL_FILE = "model.pkl"
@@ -51,37 +54,30 @@ except Exception as e:
 
 
 # ============================================================
-# SUPPORT TEAM MAPPING
+# TEAM MAPPING
 # ============================================================
 
 TEAM_MAPPING = {
 
-    "Network":
-        "Network Support Team",
+    "Network": "Network Support Team",
 
-    "Hardware":
-        "Hardware Support Team",
+    "Hardware": "Hardware Support Team",
 
-    "Software":
-        "Software Support Team",
+    "Software": "Software Support Team",
 
-    "Account":
-        "Account Support Team",
+    "Account": "Account Support Team",
 
-    "Email":
-        "Email Support Team",
+    "Email": "Email Support Team",
 
-    "Security":
-        "Cybersecurity Team",
+    "Security": "Cybersecurity Team",
 
-    "Printer":
-        "Hardware Support Team"
+    "Printer": "Hardware Support Team"
 
 }
 
 
 # ============================================================
-# ALLOWED SUPPORT TEAMS
+# ALLOWED TEAMS
 # ============================================================
 
 ALLOWED_TEAMS = [
@@ -140,9 +136,7 @@ LOW_PRIORITY_WORDS = [
 
 def get_db():
 
-    connection = sqlite3.connect(
-        DATABASE
-    )
+    connection = sqlite3.connect(DATABASE)
 
     connection.row_factory = sqlite3.Row
 
@@ -157,10 +151,7 @@ def init_db():
 
     connection = get_db()
 
-    # --------------------------------------------------------
     # USERS TABLE
-    # --------------------------------------------------------
-
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS users (
@@ -179,10 +170,7 @@ def init_db():
         """
     )
 
-    # --------------------------------------------------------
     # TICKETS TABLE
-    # --------------------------------------------------------
-
     connection.execute(
         """
         CREATE TABLE IF NOT EXISTS tickets (
@@ -220,64 +208,130 @@ def init_db():
 
 
 # ============================================================
-# PRIORITY DETECTION
+# CREATE ADMIN FROM RENDER ENVIRONMENT VARIABLES
 # ============================================================
 
-def determine_priority(ticket, category):
+def create_admin_from_env():
 
-    text = ticket.lower()
+    admin_name = os.environ.get("ADMIN_NAME")
 
-    # Security problems are automatically high priority
-    if category == "Security":
+    admin_email = os.environ.get("ADMIN_EMAIL")
 
-        return "High"
+    admin_password = os.environ.get("ADMIN_PASSWORD")
 
-    # Check high priority keywords
+    if not admin_name or not admin_email or not admin_password:
+
+        print("Admin environment variables not configured.")
+
+        return
+
+    admin_email = admin_email.strip().lower()
+
+    connection = get_db()
+
+    existing = connection.execute(
+
+        "SELECT id FROM users WHERE email = ?",
+
+        (admin_email,)
+
+    ).fetchone()
+
+    if not existing:
+
+        connection.execute(
+
+            """
+            INSERT INTO users
+            (name, email, password, role)
+
+            VALUES (?, ?, ?, 'admin')
+            """,
+
+            (
+                admin_name.strip(),
+
+                admin_email,
+
+                generate_password_hash(admin_password)
+
+            )
+
+        )
+
+        connection.commit()
+
+        print("Admin account created successfully.")
+
+    else:
+
+        print("Admin account already exists.")
+
+    connection.close()
+
+
+# ============================================================
+# LOGIN CHECK
+# ============================================================
+
+def login_required():
+
+    return "user_id" in session
+
+
+# ============================================================
+# ADMIN CHECK
+# ============================================================
+
+def admin_required():
+
+    return (
+
+        "user_id" in session
+
+        and
+
+        session.get("role") == "admin"
+
+    )
+
+
+# ============================================================
+# DETERMINE PRIORITY
+# ============================================================
+
+def determine_priority(ticket_text):
+
+    text = ticket_text.lower()
+
     for word in HIGH_PRIORITY_WORDS:
 
         if word in text:
 
             return "High"
 
-    # Check low priority keywords
     for word in LOW_PRIORITY_WORDS:
 
         if word in text:
 
             return "Low"
 
-    # Default
     return "Medium"
 
 
 # ============================================================
-# LOGIN REQUIRED CHECK
+# ASSIGN SUPPORT TEAM
 # ============================================================
 
-def login_required():
+def assign_team(category):
 
-    if "user_id" not in session:
+    return TEAM_MAPPING.get(
 
-        return False
+        category,
 
-    return True
+        "General IT Support Team"
 
-
-# ============================================================
-# ADMIN ACCESS CHECK
-# ============================================================
-
-def admin_required():
-
-    if "user_id" not in session:
-
-        return False
-
-    if session.get("role") != "admin":
-
-        return False
-
-    return True
+    )
 
 
 # ============================================================
@@ -285,26 +339,41 @@ def admin_required():
 # ============================================================
 
 @app.route("/")
-def home():
+def index():
 
-    # User must login
     if not login_required():
 
         return redirect(
             url_for("login")
         )
 
-    # Admin goes to admin dashboard
-    if session.get("role") == "admin":
+    connection = get_db()
 
-        return redirect(
-            url_for("admin_dashboard")
-        )
+    tickets = connection.execute(
+
+        """
+        SELECT *
+        FROM tickets
+        WHERE user_id = ?
+        ORDER BY id DESC
+        """,
+
+        (session["user_id"],)
+
+    ).fetchall()
+
+    connection.close()
 
     return render_template(
+
         "index.html",
-        name=session.get("name"),
-        email=session.get("email")
+
+        username=session.get("name"),
+
+        email=session.get("email"),
+
+        tickets=tickets
+
     )
 
 
@@ -312,10 +381,7 @@ def home():
 # REGISTER
 # ============================================================
 
-@app.route(
-    "/register",
-    methods=["GET", "POST"]
-)
+@app.route("/register", methods=["GET", "POST"])
 def register():
 
     if request.method == "POST":
@@ -335,61 +401,29 @@ def register():
             ""
         )
 
-        confirm_password = request.form.get(
-            "confirm_password",
-            ""
-        )
-
-        # ----------------------------------------------------
-        # VALIDATION
-        # ----------------------------------------------------
-
         if not name or not email or not password:
 
             flash(
-                "All fields are required.",
+                "Please fill in all fields.",
                 "error"
             )
 
             return redirect(
                 url_for("register")
             )
-
-        if len(password) < 6:
-
-            flash(
-                "Password must contain at least 6 characters.",
-                "error"
-            )
-
-            return redirect(
-                url_for("register")
-            )
-
-        if password != confirm_password:
-
-            flash(
-                "Passwords do not match.",
-                "error"
-            )
-
-            return redirect(
-                url_for("register")
-            )
-
-        # ----------------------------------------------------
-        # DATABASE
-        # ----------------------------------------------------
 
         connection = get_db()
 
         existing_user = connection.execute(
+
             """
             SELECT id
             FROM users
             WHERE email = ?
             """,
+
             (email,)
+
         ).fetchone()
 
         if existing_user:
@@ -397,7 +431,7 @@ def register():
             connection.close()
 
             flash(
-                "An account with this email already exists.",
+                "Email already registered.",
                 "error"
             )
 
@@ -405,27 +439,27 @@ def register():
                 url_for("register")
             )
 
-        # Hash password
         hashed_password = generate_password_hash(
             password
         )
 
         connection.execute(
+
             """
             INSERT INTO users
-            (
-                name,
-                email,
-                password,
-                role
-            )
+            (name, email, password, role)
+
             VALUES (?, ?, ?, 'user')
             """,
+
             (
                 name,
+
                 email,
+
                 hashed_password
             )
+
         )
 
         connection.commit()
@@ -433,7 +467,7 @@ def register():
         connection.close()
 
         flash(
-            "Account created successfully. Please login.",
+            "Registration successful. Please login.",
             "success"
         )
 
@@ -450,10 +484,7 @@ def register():
 # LOGIN
 # ============================================================
 
-@app.route(
-    "/login",
-    methods=["GET", "POST"]
-)
+@app.route("/login", methods=["GET", "POST"])
 def login():
 
     if request.method == "POST":
@@ -471,26 +502,27 @@ def login():
         connection = get_db()
 
         user = connection.execute(
+
             """
             SELECT *
             FROM users
             WHERE email = ?
             """,
+
             (email,)
+
         ).fetchone()
 
         connection.close()
 
-        # ----------------------------------------------------
-        # CHECK LOGIN
-        # ----------------------------------------------------
-
         if user and check_password_hash(
+
             user["password"],
+
             password
+
         ):
 
-            # Store login information in session
             session["user_id"] = user["id"]
 
             session["name"] = user["name"]
@@ -499,21 +531,23 @@ def login():
 
             session["role"] = user["role"]
 
-            # Admin dashboard
             if user["role"] == "admin":
 
                 return redirect(
-                    url_for("admin_dashboard")
+                    url_for("admin")
                 )
 
-            # Normal user dashboard
             return redirect(
-                url_for("home")
+                url_for("index")
             )
 
         flash(
             "Invalid email or password.",
             "error"
+        )
+
+        return redirect(
+            url_for("login")
         )
 
     return render_template(
@@ -541,252 +575,173 @@ def logout():
 
 
 # ============================================================
-# AI TICKET PREDICTION
+# CREATE TICKET / AI PREDICTION
 # ============================================================
 
-@app.route(
-    "/predict",
-    methods=["POST"]
-)
+@app.route("/predict", methods=["POST"])
 def predict():
-
-    # --------------------------------------------------------
-    # LOGIN CHECK
-    # --------------------------------------------------------
 
     if not login_required():
 
         return jsonify({
-            "error":
-                "Please login first."
-        }), 401
 
-    # --------------------------------------------------------
-    # MODEL CHECK
-    # --------------------------------------------------------
+            "success": False,
+
+            "message": "Please login first."
+
+        }), 401
 
     if model is None:
 
         return jsonify({
-            "error":
-                "AI model is not available."
+
+            "success": False,
+
+            "message": "AI model is not available."
+
         }), 500
 
-    # --------------------------------------------------------
-    # REQUEST DATA
-    # --------------------------------------------------------
+    data = request.get_json(
+        silent=True
+    )
 
-    data = request.get_json()
+    ticket_text = ""
 
-    if not data:
+    if data:
 
-        return jsonify({
-            "error":
-                "Invalid request."
-        }), 400
+        ticket_text = data.get(
+            "ticket",
+            ""
+        ).strip()
 
-    ticket_text = data.get(
-        "ticket",
-        ""
-    ).strip()
+    if not ticket_text:
 
-    # --------------------------------------------------------
-    # EMPTY TICKET CHECK
-    # --------------------------------------------------------
+        ticket_text = request.form.get(
+            "ticket",
+            ""
+        ).strip()
 
     if not ticket_text:
 
         return jsonify({
-            "error":
-                "Please enter your IT problem."
+
+            "success": False,
+
+            "message": "Please enter your IT problem."
+
         }), 400
 
-    # Limit very large requests
-    if len(ticket_text) > 1000:
+    # AI CATEGORY
+    prediction = model.predict(
+        [ticket_text]
+    )[0]
 
-        return jsonify({
-            "error":
-                "Ticket description cannot exceed 1000 characters."
-        }), 400
+    category = str(prediction)
 
-    # --------------------------------------------------------
-    # AI PREDICTION
-    # --------------------------------------------------------
-
-    try:
-
-        prediction = model.predict(
-            [ticket_text]
-        )[0]
-
-        category = str(
-            prediction
-        )
-
-    except Exception as e:
-
-        print(
-            "Prediction error:",
-            e
-        )
-
-        return jsonify({
-            "error":
-                "Unable to analyze the ticket."
-        }), 500
-
-    # --------------------------------------------------------
     # CONFIDENCE
-    # --------------------------------------------------------
-
     confidence = 0.0
 
     try:
 
         probabilities = model.predict_proba(
             [ticket_text]
-        )
+        )[0]
 
-        confidence = (
-            float(
-                max(probabilities[0])
-            )
-            * 100
-        )
+        confidence = float(
+            max(probabilities)
+        ) * 100
 
-    except Exception as e:
-
-        print(
-            "Confidence calculation error:",
-            e
-        )
+    except Exception:
 
         confidence = 0.0
 
-    # --------------------------------------------------------
-    # ASSIGN SUPPORT TEAM
-    # --------------------------------------------------------
-
-    assigned_team = TEAM_MAPPING.get(
-        category,
-        "General IT Support Team"
+    # PRIORITY
+    priority = determine_priority(
+        ticket_text
     )
 
-    # --------------------------------------------------------
-    # DETERMINE PRIORITY
-    # --------------------------------------------------------
-
-    priority = determine_priority(
-        ticket_text,
+    # TEAM
+    assigned_team = assign_team(
         category
     )
 
-    # --------------------------------------------------------
-    # DEFAULT STATUS
-    # --------------------------------------------------------
-
-    status = "Open"
-
-    # --------------------------------------------------------
-    # DATE / TIME
-    # --------------------------------------------------------
-
-    created_at = datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-
-    # --------------------------------------------------------
     # SAVE TICKET
-    # --------------------------------------------------------
-
     connection = get_db()
 
-    try:
+    cursor = connection.execute(
 
-        cursor = connection.execute(
-            """
-            INSERT INTO tickets
-            (
-                user_id,
-                ticket,
-                category,
-                priority,
-                assigned_team,
-                confidence,
-                status,
-                created_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                session["user_id"],
-                ticket_text,
-                category,
-                priority,
-                assigned_team,
-                confidence,
-                status,
-                created_at
-            )
+        """
+        INSERT INTO tickets
+
+        (
+            user_id,
+            ticket,
+            category,
+            priority,
+            assigned_team,
+            confidence,
+            status,
+            created_at
         )
 
-        ticket_id = cursor.lastrowid
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
 
-        connection.commit()
+        (
+            session["user_id"],
 
-    except Exception as e:
+            ticket_text,
 
-        connection.rollback()
+            category,
 
-        print(
-            "Database error:",
-            e
+            priority,
+
+            assigned_team,
+
+            confidence,
+
+            "Open",
+
+            datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+
         )
 
-        connection.close()
+    )
 
-        return jsonify({
-            "error":
-                "Unable to save the ticket."
-        }), 500
+    ticket_id = cursor.lastrowid
+
+    connection.commit()
 
     connection.close()
 
-    # --------------------------------------------------------
-    # SEND RESULT TO FRONTEND
-    # --------------------------------------------------------
-
     return jsonify({
 
-        "success":
-            True,
+        "success": True,
 
-        "ticket_id":
-            ticket_id,
+        "ticket_id": ticket_id,
 
-        "ticket":
-            ticket_text,
+        "ticket": ticket_text,
 
-        "category":
-            category,
+        "category": category,
 
-        "priority":
-            priority,
+        "priority": priority,
 
-        "team":
-            assigned_team,
+        "assigned_team": assigned_team,
 
-        "confidence":
-            round(
-                confidence,
-                2
-            ),
+        "confidence": round(
+            confidence,
+            2
+        ),
 
-        "status":
-            status,
+        "status": "Open",
 
-        "created_at":
-            created_at
+        "created_at": datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
+
+        "message": "Ticket created successfully."
 
     })
 
@@ -800,74 +755,37 @@ def my_tickets():
 
     if not login_required():
 
-        return jsonify({
-            "error":
-                "Please login first."
-        }), 401
+        return redirect(
+            url_for("login")
+        )
 
     connection = get_db()
 
     tickets = connection.execute(
+
         """
-        SELECT
-            id,
-            ticket,
-            category,
-            priority,
-            assigned_team,
-            confidence,
-            status,
-            created_at
+        SELECT *
         FROM tickets
         WHERE user_id = ?
         ORDER BY id DESC
         """,
-        (
-            session["user_id"],
-        )
+
+        (session["user_id"],)
+
     ).fetchall()
 
     connection.close()
 
-    ticket_list = []
+    return render_template(
 
-    for ticket in tickets:
+        "index.html",
 
-        ticket_list.append({
+        username=session.get("name"),
 
-            "id":
-                ticket["id"],
+        email=session.get("email"),
 
-            "ticket":
-                ticket["ticket"],
+        tickets=tickets
 
-            "category":
-                ticket["category"],
-
-            "priority":
-                ticket["priority"],
-
-            "team":
-                ticket["assigned_team"],
-
-            "confidence":
-                round(
-                    float(
-                        ticket["confidence"]
-                    ),
-                    2
-                ),
-
-            "status":
-                ticket["status"],
-
-            "created_at":
-                ticket["created_at"]
-
-        })
-
-    return jsonify(
-        ticket_list
     )
 
 
@@ -876,7 +794,7 @@ def my_tickets():
 # ============================================================
 
 @app.route("/admin")
-def admin_dashboard():
+def admin():
 
     if not admin_required():
 
@@ -889,14 +807,100 @@ def admin_dashboard():
             url_for("login")
         )
 
+    connection = get_db()
+
+    total_tickets = connection.execute(
+
+        """
+        SELECT COUNT(*) AS count
+        FROM tickets
+        """
+
+    ).fetchone()["count"]
+
+    open_tickets = connection.execute(
+
+        """
+        SELECT COUNT(*) AS count
+        FROM tickets
+        WHERE status = 'Open'
+        """
+
+    ).fetchone()["count"]
+
+    in_progress = connection.execute(
+
+        """
+        SELECT COUNT(*) AS count
+        FROM tickets
+        WHERE status = 'In Progress'
+        """
+
+    ).fetchone()["count"]
+
+    resolved = connection.execute(
+
+        """
+        SELECT COUNT(*) AS count
+        FROM tickets
+        WHERE status = 'Resolved'
+        """
+
+    ).fetchone()["count"]
+
+    high_priority = connection.execute(
+
+        """
+        SELECT COUNT(*) AS count
+        FROM tickets
+        WHERE priority = 'High'
+        """
+
+    ).fetchone()["count"]
+
+    tickets = connection.execute(
+
+        """
+        SELECT
+            tickets.*,
+            users.name AS user_name,
+            users.email AS user_email
+
+        FROM tickets
+
+        JOIN users
+        ON tickets.user_id = users.id
+
+        ORDER BY tickets.id DESC
+
+        LIMIT 100
+        """
+
+    ).fetchall()
+
+    connection.close()
+
     return render_template(
+
         "admin.html",
-        name=session.get("name")
+
+        tickets=tickets,
+
+        total_tickets=total_tickets,
+
+        open_tickets=open_tickets,
+
+        in_progress=in_progress,
+
+        resolved=resolved,
+
+        high_priority=high_priority
+
     )
 
 
 # ============================================================
-# ADMIN — GET ALL TICKETS
+# ADMIN TICKETS API
 # ============================================================
 
 @app.route("/admin/tickets")
@@ -905,87 +909,77 @@ def admin_tickets():
     if not admin_required():
 
         return jsonify({
-            "error":
-                "Admin access required."
+
+            "success": False,
+
+            "message": "Admin access required."
+
         }), 403
 
     connection = get_db()
 
     tickets = connection.execute(
+
         """
         SELECT
-            tickets.id,
-            tickets.ticket,
-            tickets.category,
-            tickets.priority,
-            tickets.assigned_team,
-            tickets.confidence,
-            tickets.status,
-            tickets.created_at,
+            tickets.*,
             users.name AS user_name,
             users.email AS user_email
 
         FROM tickets
 
-        INNER JOIN users
+        JOIN users
         ON tickets.user_id = users.id
 
         ORDER BY tickets.id DESC
         """
+
     ).fetchall()
 
     connection.close()
 
-    ticket_list = []
+    result = []
 
     for ticket in tickets:
 
-        ticket_list.append({
+        result.append({
 
-            "id":
-                ticket["id"],
+            "id": ticket["id"],
 
-            "ticket":
-                ticket["ticket"],
+            "user_name": ticket["user_name"],
 
-            "category":
-                ticket["category"],
+            "user_email": ticket["user_email"],
 
-            "priority":
-                ticket["priority"],
+            "ticket": ticket["ticket"],
 
-            "team":
-                ticket["assigned_team"],
+            "category": ticket["category"],
 
-            "confidence":
-                round(
-                    float(
-                        ticket["confidence"]
-                    ),
-                    2
-                ),
+            "priority": ticket["priority"],
 
-            "status":
-                ticket["status"],
+            "assigned_team": ticket["assigned_team"],
 
-            "created_at":
-                ticket["created_at"],
+            "confidence": round(
+                ticket["confidence"],
+                2
+            ),
 
-            "user_name":
-                ticket["user_name"],
+            "status": ticket["status"],
 
-            "user_email":
-                ticket["user_email"]
+            "created_at": ticket["created_at"]
 
         })
 
-    return jsonify(
-        ticket_list
-    )
+    return jsonify({
+
+        "success": True,
+
+        "tickets": result
+
+    })
 
 
 # ============================================================
-# ADMIN — STATISTICS
+# ADMIN STATISTICS
 # ============================================================
 
 @app.route("/admin/stats")
@@ -994,115 +988,151 @@ def admin_stats():
     if not admin_required():
 
         return jsonify({
-            "error":
-                "Admin access required."
+
+            "success": False,
+
+            "message": "Admin access required."
+
         }), 403
 
     connection = get_db()
 
-    # Total tickets
-    total = connection.execute(
-        """
-        SELECT COUNT(*)
-        FROM tickets
-        """
-    ).fetchone()[0]
+    category_rows = connection.execute(
 
-    # High priority tickets
-    high = connection.execute(
         """
-        SELECT COUNT(*)
-        FROM tickets
-        WHERE priority = 'High'
-        """
-    ).fetchone()[0]
+        SELECT
+            category,
+            COUNT(*) AS count
 
-    # Open tickets
-    open_tickets = connection.execute(
-        """
-        SELECT COUNT(*)
         FROM tickets
-        WHERE status = 'Open'
-        """
-    ).fetchone()[0]
 
-    # In progress
-    in_progress = connection.execute(
+        GROUP BY category
+
+        ORDER BY count DESC
         """
-        SELECT COUNT(*)
+
+    ).fetchall()
+
+    priority_rows = connection.execute(
+
+        """
+        SELECT
+            priority,
+            COUNT(*) AS count
+
         FROM tickets
-        WHERE status = 'In Progress'
-        """
-    ).fetchone()[0]
 
-    # Resolved
-    resolved = connection.execute(
+        GROUP BY priority
         """
-        SELECT COUNT(*)
+
+    ).fetchall()
+
+    status_rows = connection.execute(
+
+        """
+        SELECT
+            status,
+            COUNT(*) AS count
+
         FROM tickets
-        WHERE status = 'Resolved'
-        """
-    ).fetchone()[0]
 
-    # Normal users
-    total_users = connection.execute(
+        GROUP BY status
         """
-        SELECT COUNT(*)
-        FROM users
-        WHERE role = 'user'
+
+    ).fetchall()
+
+    team_rows = connection.execute(
+
         """
-    ).fetchone()[0]
+        SELECT
+            assigned_team,
+            COUNT(*) AS count
+
+        FROM tickets
+
+        GROUP BY assigned_team
+
+        ORDER BY count DESC
+        """
+
+    ).fetchall()
 
     connection.close()
 
     return jsonify({
 
-        "total":
-            total,
+        "success": True,
 
-        "high":
-            high,
+        "categories": [
 
-        "open":
-            open_tickets,
+            {
+                "category": row["category"],
+                "count": row["count"]
+            }
 
-        "in_progress":
-            in_progress,
+            for row in category_rows
 
-        "resolved":
-            resolved,
+        ],
 
-        "users":
-            total_users
+        "priorities": [
+
+            {
+                "priority": row["priority"],
+                "count": row["count"]
+            }
+
+            for row in priority_rows
+
+        ],
+
+        "statuses": [
+
+            {
+                "status": row["status"],
+                "count": row["count"]
+            }
+
+            for row in status_rows
+
+        ],
+
+        "teams": [
+
+            {
+                "team": row["assigned_team"],
+                "count": row["count"]
+            }
+
+            for row in team_rows
+
+        ]
 
     })
 
 
 # ============================================================
-# ADMIN — UPDATE TICKET STATUS
+# ADMIN UPDATE STATUS
 # ============================================================
 
 @app.route(
     "/admin/update_status",
     methods=["POST"]
 )
-def update_ticket_status():
+def update_status():
 
     if not admin_required():
 
         return jsonify({
-            "error":
-                "Admin access required."
+
+            "success": False,
+
+            "message": "Admin access required."
+
         }), 403
 
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "error":
-                "Invalid request."
-        }), 400
+    data = request.get_json(
+        silent=True
+    ) or {}
 
     ticket_id = data.get(
         "ticket_id"
@@ -1118,89 +1148,86 @@ def update_ticket_status():
 
         "In Progress",
 
-        "Resolved"
+        "Resolved",
+
+        "Closed"
 
     ]
 
     if not ticket_id:
 
         return jsonify({
-            "error":
-                "Ticket ID is required."
+
+            "success": False,
+
+            "message": "Ticket ID is required."
+
         }), 400
 
     if status not in allowed_statuses:
 
         return jsonify({
-            "error":
-                "Invalid status."
+
+            "success": False,
+
+            "message": "Invalid status."
+
         }), 400
 
     connection = get_db()
 
-    cursor = connection.execute(
+    connection.execute(
+
         """
         UPDATE tickets
-
         SET status = ?
-
         WHERE id = ?
         """,
+
         (
             status,
+
             ticket_id
         )
+
     )
 
     connection.commit()
 
-    updated = cursor.rowcount
-
     connection.close()
-
-    if updated == 0:
-
-        return jsonify({
-            "error":
-                "Ticket not found."
-        }), 404
 
     return jsonify({
 
-        "success":
-            True,
+        "success": True,
 
-        "message":
-            "Ticket status updated successfully."
+        "message": "Ticket status updated."
 
     })
 
 
 # ============================================================
-# ADMIN — UPDATE ASSIGNED TEAM
+# ADMIN UPDATE TEAM
 # ============================================================
 
 @app.route(
     "/admin/update_team",
     methods=["POST"]
 )
-def update_ticket_team():
+def update_team():
 
     if not admin_required():
 
         return jsonify({
-            "error":
-                "Admin access required."
+
+            "success": False,
+
+            "message": "Admin access required."
+
         }), 403
 
-    data = request.get_json()
-
-    if not data:
-
-        return jsonify({
-            "error":
-                "Invalid request."
-        }), 400
+    data = request.get_json(
+        silent=True
+    ) or {}
 
     ticket_id = data.get(
         "ticket_id"
@@ -1213,53 +1240,50 @@ def update_ticket_team():
     if not ticket_id:
 
         return jsonify({
-            "error":
-                "Ticket ID is required."
+
+            "success": False,
+
+            "message": "Ticket ID is required."
+
         }), 400
 
     if team not in ALLOWED_TEAMS:
 
         return jsonify({
-            "error":
-                "Invalid support team."
+
+            "success": False,
+
+            "message": "Invalid support team."
+
         }), 400
 
     connection = get_db()
 
-    cursor = connection.execute(
+    connection.execute(
+
         """
         UPDATE tickets
-
         SET assigned_team = ?
-
         WHERE id = ?
         """,
+
         (
             team,
+
             ticket_id
         )
+
     )
 
     connection.commit()
 
-    updated = cursor.rowcount
-
     connection.close()
-
-    if updated == 0:
-
-        return jsonify({
-            "error":
-                "Ticket not found."
-        }), 404
 
     return jsonify({
 
-        "success":
-            True,
+        "success": True,
 
-        "message":
-            "Support team updated successfully."
+        "message": "Support team updated."
 
     })
 
@@ -1273,22 +1297,22 @@ def health():
 
     return jsonify({
 
-        "status":
-            "healthy",
+        "status": "healthy",
 
-        "application":
-            "HelpGenie",
+        "application": "HelpGenie",
 
-        "ai_model":
-            "loaded" if model is not None
+        "ai_model": (
+
+            "loaded"
+
+            if model is not None
+
             else "not loaded"
+
+        )
 
     })
 
-
-# ============================================================
-# APPLICATION START
-# ============================================================
 
 # ============================================================
 # INITIALIZE DATABASE
@@ -1298,13 +1322,24 @@ init_db()
 
 
 # ============================================================
-# APPLICATION START
+# CREATE ADMIN
+# ============================================================
+
+create_admin_from_env()
+
+
+# ============================================================
+# START APPLICATION
 # ============================================================
 
 if __name__ == "__main__":
 
     app.run(
+
         debug=True,
+
         host="0.0.0.0",
+
         port=5000
+
     )
