@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <meta
+        name="description"
+        content="HelpGenie - AI-Powered IT Helpdesk Assistant"
+    >
+
+    <title>HelpGenie Dashboard</title>
+
+    <link
+        rel="stylesheet"
+        href="{{ url_for('static', filename='style.css') }}"
+    >
+
+</head>
+
+<body>
+
+
+<!-- =====================================================
+     NAVBAR
+===================================================== -->
+
+<nav class="navbar">
+
+    <div class="navbar-inner">
+
+        <a
+            href="{{ url_for('home') }}"
+            class="nav-brand"
+        >
+            HelpGenie
+        </a>
+
+
+        <div class="nav-right">
+
+            <span class="user-name">
+                Hi, {{ name }}
+            </span>
+
+
+            {% if session.get("role") == "admin" %}
+
+                <a
+                    href="{{ url_for('admin_dashboard') }}"
+                    class="logout-btn"
+                >
+                    Admin Panel
+                </a>
+
+            {% endif %}
+
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="logout-btn"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </div>
+
+</nav>
+
+
+<!-- =====================================================
+     MAIN DASHBOARD
+===================================================== -->
+
+<main class="dashboard">
+
+
+    <!-- =================================================
+         HEADER
+    ================================================= -->
+
+    <section class="dashboard-header">
+
+        <h1>
+            IT Helpdesk Dashboard
+        </h1>
+
+        <p>
+            Welcome to HelpGenie. Describe your IT problem
+            and let AI automatically classify and route it.
+        </p>
+
+    </section>
+
+
+    <!-- =================================================
+         FLASH MESSAGES
+    ================================================= -->
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+
+        {% if messages %}
+
+            <div class="flash-container">
+
+                {% for category, message in messages %}
+
+                    <div class="flash {{ category }}">
+                        {{ message }}
+                    </div>
+
+                {% endfor %}
+
+            </div>
+
+        {% endif %}
+
+    {% endwith %}
+
+
+    <!-- =================================================
+         STATISTICS
+    ================================================= -->
+
+    <section class="stats-grid">
+
+
+        <!-- TOTAL -->
+
+        <div class="stat-card">
+
+            <div class="stat-label">
+                Total Tickets
+            </div>
+
+            <div
+                class="stat-number"
+                id="totalTickets"
+            >
+                0
+            </div>
+
+        </div>
+
+
+        <!-- OPEN -->
+
+        <div class="stat-card">
+
+            <div class="stat-label">
+                Open Tickets
+            </div>
+
+            <div
+                class="stat-number"
+                id="openTickets"
+            >
+                0
+            </div>
+
+        </div>
+
+
+        <!-- IN PROGRESS -->
+
+        <div class="stat-card">
+
+            <div class="stat-label">
+                In Progress
+            </div>
+
+            <div
+                class="stat-number"
+                id="progressTickets"
+            >
+                0
+            </div>
+
+        </div>
+
+
+        <!-- RESOLVED -->
+
+        <div class="stat-card">
+
+            <div class="stat-label">
+                Resolved
+            </div>
+
+            <div
+                class="stat-number"
+                id="resolvedTickets"
+            >
+                0
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =================================================
+         SUBMIT TICKET
+    ================================================= -->
+
+    <section class="ticket-card">
+
+        <h2>
+            Submit an IT Support Ticket
+        </h2>
+
+        <p class="ticket-card-description">
+
+            Describe your technical problem in simple words.
+            HelpGenie will use machine learning to identify
+            the issue category and assign the appropriate
+            support team.
+
+        </p>
+
+
+        <form id="ticketForm">
+
+
+            <div class="form-group">
+
+                <label for="ticketInput">
+                    Describe Your Problem
+                </label>
+
+
+                <textarea
+                    id="ticketInput"
+                    class="form-textarea"
+                    placeholder="Example: My WiFi is not working on my laptop..."
+                    maxlength="1000"
+                    required
+                ></textarea>
+
+
+                <small
+                    id="characterCount"
+                    style="
+                        display:block;
+                        margin-top:6px;
+                        color:#64748b;
+                        font-size:12px;
+                    "
+                >
+                    0 / 1000
+                </small>
+
+            </div>
+
+
+            <button
+                type="submit"
+                class="analyze-btn"
+                id="analyzeButton"
+            >
+                Analyze Ticket
+            </button>
+
+        </form>
+
+
+        <!-- =============================================
+             AI RESULT
+        ============================================== -->
+
+        <div
+            class="result-card"
+            id="resultCard"
+        >
+
+            <h3
+                style="
+                    margin-bottom:15px;
+                    font-size:18px;
+                "
+            >
+                AI Analysis Result
+            </h3>
+
+
+            <div class="result-grid">
+
+
+                <!-- CATEGORY -->
+
+                <div class="result-item">
+
+                    <span class="result-label">
+                        Category
+                    </span>
+
+                    <span
+                        class="result-value"
+                        id="resultCategory"
+                    >
+                        -
+                    </span>
+
+                </div>
+
+
+                <!-- PRIORITY -->
+
+                <div class="result-item">
+
+                    <span class="result-label">
+                        Priority
+                    </span>
+
+                    <span
+                        class="result-value"
+                        id="resultPriority"
+                    >
+                        -
+                    </span>
+
+                </div>
+
+
+                <!-- TEAM -->
+
+                <div class="result-item">
+
+                    <span class="result-label">
+                        Assigned Team
+                    </span>
+
+                    <span
+                        class="result-value"
+                        id="resultTeam"
+                    >
+                        -
+                    </span>
+
+                </div>
+
+
+                <!-- CONFIDENCE -->
+
+                <div class="result-item">
+
+                    <span class="result-label">
+                        AI Confidence
+                    </span>
+
+                    <span
+                        class="result-value"
+                        id="resultConfidence"
+                    >
+                        -
+                    </span>
+
+
+                    <!-- CONFIDENCE BAR -->
+
+                    <div
+                        style="
+                            width:100%;
+                            height:7px;
+                            background:#e2e8f0;
+                            border-radius:10px;
+                            margin-top:10px;
+                            overflow:hidden;
+                        "
+                    >
+
+                        <div
+                            id="confidenceBar"
+                            style="
+                                width:0%;
+                                height:100%;
+                                background:#2563eb;
+                                border-radius:10px;
+                                transition:width .5s ease;
+                            "
+                        ></div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- TICKET ID -->
+
+            <div
+                style="
+                    margin-top:15px;
+                    color:#64748b;
+                    font-size:13px;
+                "
+            >
+
+                Ticket ID:
+
+                <strong
+                    id="resultTicketId"
+                >
+                    -
+                </strong>
+
+            </div>
+
+
+            <!-- STATUS -->
+
+            <div
+                style="
+                    margin-top:8px;
+                    color:#64748b;
+                    font-size:13px;
+                "
+            >
+
+                Current Status:
+
+                <strong
+                    id="resultStatus"
+                >
+                    Open
+                </strong>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =================================================
+         HOW IT WORKS
+    ================================================= -->
+
+    <section class="ticket-card">
+
+        <h2>
+            How HelpGenie Works
+        </h2>
+
+        <p class="ticket-card-description">
+
+            Our AI-powered helpdesk automatically
+            understands your IT problem and routes it
+            to the appropriate support team.
+
+        </p>
+
+
+        <div class="result-grid">
+
+
+            <!-- STEP 1 -->
+
+            <div class="result-item">
+
+                <span class="result-label">
+                    STEP 01
+                </span>
+
+                <strong>
+                    Submit
+                </strong>
+
+                <p
+                    style="
+                        margin-top:8px;
+                        color:#64748b;
+                        font-size:13px;
+                        line-height:1.5;
+                    "
+                >
+                    Describe your IT problem using
+                    simple words.
+                </p>
+
+            </div>
+
+
+            <!-- STEP 2 -->
+
+            <div class="result-item">
+
+                <span class="result-label">
+                    STEP 02
+                </span>
+
+                <strong>
+                    AI Classification
+                </strong>
+
+                <p
+                    style="
+                        margin-top:8px;
+                        color:#64748b;
+                        font-size:13px;
+                        line-height:1.5;
+                    "
+                >
+                    The machine-learning model identifies
+                    the category of your issue.
+                </p>
+
+            </div>
+
+
+            <!-- STEP 3 -->
+
+            <div class="result-item">
+
+                <span class="result-label">
+                    STEP 03
+                </span>
+
+                <strong>
+                    Smart Routing
+                </strong>
+
+                <p
+                    style="
+                        margin-top:8px;
+                        color:#64748b;
+                        font-size:13px;
+                        line-height:1.5;
+                    "
+                >
+                    The ticket is automatically assigned
+                    to the relevant support team.
+                </p>
+
+            </div>
+
+
+            <!-- STEP 4 -->
+
+            <div class="result-item">
+
+                <span class="result-label">
+                    STEP 04
+                </span>
+
+                <strong>
+                    Track
+                </strong>
+
+                <p
+                    style="
+                        margin-top:8px;
+                        color:#64748b;
+                        font-size:13px;
+                        line-height:1.5;
+                    "
+                >
+                    Track your ticket from Open to
+                    Resolved.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- =================================================
+         TICKET HISTORY
+    ================================================= -->
+
+    <section class="history-card">
+
+
+        <div class="history-header">
+
+            <div>
+
+                <h2>
+                    My Ticket History
+                </h2>
+
+                <p
+                    style="
+                        color:#64748b;
+                        font-size:13px;
+                        margin-top:5px;
+                    "
+                >
+                    View and track all your submitted tickets.
+                </p>
+
+            </div>
+
+
+            <button
+                type="button"
+                class="refresh-btn"
+                id="refreshButton"
+            >
+                ↻ Refresh
+            </button>
+
+        </div>
+
+
+        <!-- SEARCH -->
+
+        <input
+            type="search"
+            id="searchInput"
+            class="search-box"
+            placeholder="Search by ticket, category, priority, team or status..."
+        >
+
+
+        <!-- LOADING -->
+
+        <div
+            id="loading"
+            class="loading"
+        >
+            Loading tickets...
+        </div>
+
+
+        <!-- EMPTY -->
+
+        <div
+            id="emptyState"
+            class="empty-state"
+            style="display:none;"
+        >
+
+            <h3>
+                No tickets found
+            </h3>
+
+            <p>
+                Submit your first IT support ticket
+                to see it here.
+            </p>
+
+        </div>
+
+
+        <!-- TABLE -->
+
+        <div
+            class="table-wrapper"
+            id="tableWrapper"
+            style="display:none;"
+        >
+
+            <table class="ticket-table">
+
+                <thead>
+
+                    <tr>
+
+                        <th>
+                            ID
+                        </th>
+
+                        <th>
+                            Ticket
+                        </th>
+
+                        <th>
+                            Category
+                        </th>
+
+                        <th>
+                            Priority
+                        </th>
+
+                        <th>
+                            Team
+                        </th>
+
+                        <th>
+                            Status
+                        </th>
+
+                        <th>
+                            Date
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody id="ticketTableBody">
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+    </section>
+
+
+</main>
+
+
+<!-- =====================================================
+     FOOTER
+===================================================== -->
+
+<footer
+    style="
+        text-align:center;
+        padding:30px 15px;
+        color:#64748b;
+        font-size:13px;
+    "
+>
+
+    <strong>
+        HelpGenie
+    </strong>
+
+    <br>
+
+    AI-Powered IT Helpdesk Assistant
+
+    <br>
+
+    Smart • Fast • Automated
+
+    <br><br>
+
+    Built for College Hackathon
+
+</footer>
+
+
+<!-- =====================================================
+     JAVASCRIPT
+===================================================== -->
+
+<script>
+
+
+/* =====================================================
+   GLOBAL DATA
+===================================================== */
+
+let allTickets = [];
+
+
+/* =====================================================
+   ESCAPE HTML
+===================================================== */
+
+function escapeHTML(value) {
+
+    const div =
+        document.createElement("div");
+
+    div.textContent =
+        value ?? "";
+
+    return div.innerHTML;
+}
+
+
+/* =====================================================
+   PRIORITY BADGE
+===================================================== */
+
+function getPriorityBadge(priority) {
+
+    if (priority === "High") {
+
+        return `
+            <span class="badge badge-high">
+                High
+            </span>
+        `;
+
+    }
+
+
+    if (priority === "Low") {
+
+        return `
+            <span class="badge badge-low">
+                Low
+            </span>
+        `;
+
+    }
+
+
+    return `
+        <span class="badge badge-medium">
+            Medium
+        </span>
+    `;
+}
+
+
+/* =====================================================
+   STATUS BADGE
+===================================================== */
+
+function getStatusBadge(status) {
+
+    if (status === "Resolved") {
+
+        return `
+            <span class="badge badge-resolved">
+                Resolved
+            </span>
+        `;
+
+    }
+
+
+    if (status === "In Progress") {
+
+        return `
+            <span class="badge badge-progress">
+                In Progress
+            </span>
+        `;
+
+    }
+
+
+    return `
+        <span class="badge badge-open">
+            Open
+        </span>
+    `;
+}
+
+
+/* =====================================================
+   LOAD TICKETS
+===================================================== */
+
+async function loadTickets() {
+
+    const loading =
+        document.getElementById("loading");
+
+    const emptyState =
+        document.getElementById("emptyState");
+
+    const tableWrapper =
+        document.getElementById("tableWrapper");
+
+
+    loading.style.display =
+        "block";
+
+    emptyState.style.display =
+        "none";
+
+    tableWrapper.style.display =
+        "none";
+
+
+    try {
+
+        const response =
+            await fetch("/my_tickets");
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Unable to load tickets."
+            );
+
+        }
+
+
+        allTickets =
+            await response.json();
+
+
+        renderTickets(
+            allTickets
+        );
+
+
+        updateStatistics(
+            allTickets
+        );
+
+
+    } catch (error) {
+
+        loading.textContent =
+            "Unable to load tickets. Please refresh.";
+
+        console.error(
+            error
+        );
+
+        return;
+
+    }
+
+
+    loading.style.display =
+        "none";
+}
+
+
+/* =====================================================
+   RENDER TICKETS
+===================================================== */
+
+function renderTickets(tickets) {
+
+    const tableWrapper =
+        document.getElementById(
+            "tableWrapper"
+        );
+
+
+    const emptyState =
+        document.getElementById(
+            "emptyState"
+        );
+
+
+    const tableBody =
+        document.getElementById(
+            "ticketTableBody"
+        );
+
+
+    tableBody.innerHTML =
+        "";
+
+
+    if (tickets.length === 0) {
+
+        tableWrapper.style.display =
+            "none";
+
+        emptyState.style.display =
+            "block";
+
+        return;
+
+    }
+
+
+    emptyState.style.display =
+        "none";
+
+    tableWrapper.style.display =
+        "block";
+
+
+    tickets.forEach(
+        ticket => {
+
+            const row =
+                document.createElement(
+                    "tr"
+                );
+
+
+            row.innerHTML = `
+
+                <td>
+                    #${escapeHTML(
+                        String(ticket.id)
+                    )}
+                </td>
+
+
+                <td>
+
+                    <div
+                        class="ticket-text"
+                        title="${escapeHTML(
+                            ticket.ticket
+                        )}"
+                    >
+
+                        ${escapeHTML(
+                            ticket.ticket
+                        )}
+
+                    </div>
+
+                </td>
+
+
+                <td>
+
+                    ${escapeHTML(
+                        ticket.category
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    ${getPriorityBadge(
+                        ticket.priority
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    ${escapeHTML(
+                        ticket.team
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    ${getStatusBadge(
+                        ticket.status
+                    )}
+
+                </td>
+
+
+                <td>
+
+                    ${escapeHTML(
+                        ticket.created_at
+                    )}
+
+                </td>
+
+            `;
+
+
+            tableBody.appendChild(
+                row
+            );
+
+        }
+    );
+}
+
+
+/* =====================================================
+   UPDATE STATISTICS
+===================================================== */
+
+function updateStatistics(
+    tickets
+) {
+
+    const total =
+        tickets.length;
+
+
+    const open =
+        tickets.filter(
+            ticket =>
+                ticket.status === "Open"
+        ).length;
+
+
+    const progress =
+        tickets.filter(
+            ticket =>
+                ticket.status === "In Progress"
+        ).length;
+
+
+    const resolved =
+        tickets.filter(
+            ticket =>
+                ticket.status === "Resolved"
+        ).length;
+
+
+    document.getElementById(
+        "totalTickets"
+    ).textContent =
+        total;
+
+
+    document.getElementById(
+        "openTickets"
+    ).textContent =
+        open;
+
+
+    document.getElementById(
+        "progressTickets"
+    ).textContent =
+        progress;
+
+
+    document.getElementById(
+        "resolvedTickets"
+    ).textContent =
+        resolved;
+}
+
+
+/* =====================================================
+   SEARCH
+===================================================== */
+
+document
+    .getElementById(
+        "searchInput"
+    )
+    .addEventListener(
+        "input",
+        function () {
+
+            const search =
+                this.value
+                    .toLowerCase()
+                    .trim();
+
+
+            const filtered =
+                allTickets.filter(
+                    ticket => {
+
+                        return (
+
+                            String(
+                                ticket.id
+                            )
+                            .includes(search)
+
+                            ||
+
+                            ticket.ticket
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            ticket.category
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            ticket.priority
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            ticket.team
+                                .toLowerCase()
+                                .includes(search)
+
+                            ||
+
+                            ticket.status
+                                .toLowerCase()
+                                .includes(search)
+
+                        );
+
+                    }
+                );
+
+
+            renderTickets(
+                filtered
+            );
+
+        }
+    );
+
+
+/* =====================================================
+   REFRESH
+===================================================== */
+
+document
+    .getElementById(
+        "refreshButton"
+    )
+    .addEventListener(
+        "click",
+        async function () {
+
+            const button =
+                this;
+
+
+            button.disabled =
+                true;
+
+
+            button.textContent =
+                "Refreshing...";
+
+
+            await loadTickets();
+
+
+            button.disabled =
+                false;
+
+
+            button.textContent =
+                "↻ Refresh";
+
+        }
+    );
+
+
+/* =====================================================
+   CHARACTER COUNTER
+===================================================== */
+
+const ticketInput =
+    document.getElementById(
+        "ticketInput"
+    );
+
+
+const characterCount =
+    document.getElementById(
+        "characterCount"
+    );
+
+
+ticketInput.addEventListener(
+    "input",
+    function () {
+
+        characterCount.textContent =
+            `${this.value.length} / 1000`;
+
+    }
+);
+
+
+/* =====================================================
+   SUBMIT TICKET
+===================================================== */
+
+document
+    .getElementById(
+        "ticketForm"
+    )
+    .addEventListener(
+        "submit",
+        async function (event) {
+
+            event.preventDefault();
+
+
+            const input =
+                document.getElementById(
+                    "ticketInput"
+                );
+
+
+            const button =
+                document.getElementById(
+                    "analyzeButton"
+                );
+
+
+            const resultCard =
+                document.getElementById(
+                    "resultCard"
+                );
+
+
+            const ticket =
+                input.value.trim();
+
+
+            if (!ticket) {
+
+                alert(
+                    "Please describe your IT problem."
+                );
+
+                return;
+
+            }
+
+
+            button.disabled =
+                true;
+
+
+            button.textContent =
+                "Analyzing...";
+
+
+            resultCard.classList.remove(
+                "show"
+            );
+
+
+            try {
+
+                const response =
+                    await fetch(
+                        "/predict",
+                        {
+
+                            method: "POST",
+
+                            headers: {
+                                "Content-Type":
+                                    "application/json"
+                            },
+
+                            body:
+                                JSON.stringify({
+                                    ticket:
+                                        ticket
+                                })
+
+                        }
+                    );
+
+
+                const data =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        "Prediction failed."
+                    );
+
+                }
+
+
+                /* =================================
+                   SHOW CATEGORY
+                ================================= */
+
+                document.getElementById(
+                    "resultCategory"
+                ).textContent =
+                    data.category;
+
+
+                /* =================================
+                   SHOW PRIORITY
+                ================================= */
+
+                document.getElementById(
+                    "resultPriority"
+                ).textContent =
+                    data.priority;
+
+
+                /* =================================
+                   SHOW TEAM
+                ================================= */
+
+                document.getElementById(
+                    "resultTeam"
+                ).textContent =
+                    data.team;
+
+
+                /* =================================
+                   SHOW CONFIDENCE
+                ================================= */
+
+                document.getElementById(
+                    "resultConfidence"
+                ).textContent =
+                    data.confidence + "%";
+
+
+                /* =================================
+                   CONFIDENCE BAR
+                ================================= */
+
+                document.getElementById(
+                    "confidenceBar"
+                ).style.width =
+                    data.confidence + "%";
+
+
+                /* =================================
+                   TICKET ID
+                ================================= */
+
+                document.getElementById(
+                    "resultTicketId"
+                ).textContent =
+                    "#" + data.ticket_id;
+
+
+                /* =================================
+                   STATUS
+                ================================= */
+
+                document.getElementById(
+                    "resultStatus"
+                ).textContent =
+                    data.status;
+
+
+                /* =================================
+                   SHOW RESULT
+                ================================= */
+
+                resultCard.classList.add(
+                    "show"
+                );
+
+
+                /* =================================
+                   CLEAR INPUT
+                ================================= */
+
+                input.value =
+                    "";
+
+
+                characterCount.textContent =
+                    "0 / 1000";
+
+
+                /* =================================
+                   REFRESH HISTORY
+                ================================= */
+
+                await loadTickets();
+
+
+                /* =================================
+                   SCROLL TO RESULT
+                ================================= */
+
+                setTimeout(
+                    function () {
+
+                        resultCard.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center"
+                        });
+
+                    },
+                    100
+                );
+
+
+            } catch (error) {
+
+                alert(
+                    error.message
+                );
+
+
+                console.error(
+                    error
+                );
+
+            } finally {
+
+                button.disabled =
+                    false;
+
+
+                button.textContent =
+                    "Analyze Ticket";
+
+            }
+
+        }
+    );
+
+
+/* =====================================================
+   INITIAL LOAD
+===================================================== */
+
+loadTickets();
+
+</script>
+
+
+</body>
+
+</html>

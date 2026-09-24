@@ -1,0 +1,77 @@
+ticket,category
+My WiFi is not working,Network
+Internet connection is very slow,Network
+I cannot connect to the internet,Network
+The network keeps disconnecting,Network
+WiFi is connected but there is no internet,Network
+My laptop cannot find the WiFi,Network
+I am unable to access the company network,Network
+VPN is not connecting,Network
+The internet connection keeps dropping,Network
+Network connection is unavailable,Network
+
+My laptop is not turning on,Hardware
+My computer is overheating,Hardware
+The keyboard is not working,Hardware
+My mouse is not working,Hardware
+My laptop screen is blank,Hardware
+The computer is making a strange noise,Hardware
+My laptop battery is not charging,Hardware
+The monitor is not displaying anything,Hardware
+My computer is running very slowly,Hardware
+My laptop keeps shutting down,Hardware
+
+Microsoft Word is not opening,Software
+The application keeps crashing,Software
+I cannot install the software,Software
+The software is not responding,Software
+An application is showing an error,Software
+My program stopped working,Software
+The application freezes frequently,Software
+I need help updating the software,Software
+The software installation failed,Software
+A desktop application is not working,Software
+
+I forgot my password,Account
+I cannot log into my account,Account
+My account is locked,Account
+I need to reset my password,Account
+I forgot my username,Account
+I cannot access my employee account,Account
+My login credentials are not working,Account
+Please unlock my account,Account
+I need help with account access,Account
+I am unable to sign in,Account
+
+I cannot send an email,Email
+I am not receiving emails,Email
+My email is not working,Email
+The email application keeps crashing,Email
+I cannot open an email attachment,Email
+My mailbox is full,Email
+Emails are going to spam,Email
+I cannot access my company email,Email
+Email messages are delayed,Email
+My email password is not working,Email
+
+I think my computer has a virus,Security
+I received a suspicious email,Security
+Someone tried to access my account,Security
+I clicked on a suspicious link,Security
+My account may have been hacked,Security
+I received a phishing message,Security
+There is suspicious activity on my computer,Security
+I need to report a security issue,Security
+I received an unknown login alert,Security
+My computer is infected with malware,Security
+
+The printer is not working,Printer
+I cannot print a document,Printer
+The printer is offline,Printer
+The printer is showing an error,Printer
+My print job is stuck,Printer
+The printer is not detected,Printer
+The printer is printing blank pages,Printer
+I cannot connect to the office printer,Printer
+The printer has stopped responding,Printer
+My document is not printing,Printer
